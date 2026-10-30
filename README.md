@@ -214,6 +214,18 @@ an interrupted process, inspect and remove a stale guard before retrying.
 
 ## Validation
 
+GitHub Actions runs native checks on standard macOS and Linux runners for both
+ARM64 and x86-64. Linux uses rootless Podman. Separate Linux integration jobs
+test a disposable authenticated TLS registry and an SSH Nix builder with an
+independent container store and local builds disabled. These jobs run only for
+public repositories, where standard runners are free. They do not require
+registry secrets or publish images externally. A separate, explicitly triggered
+[GHCR experiment](.github/workflows/registry-ghcr.yml) uses the temporary GitHub
+token to push/pull a unique external test package and then deletes that package.
+See the
+[native workflow](.github/workflows/validation.yml) and
+[Linux experiments](.github/workflows/remote-builder.yml).
+
 On macOS, the development shell includes Lima. Run the full Linux suite in a
 native Linux VM using Apple's virtualization framework:
 

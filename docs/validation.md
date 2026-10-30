@@ -1,20 +1,73 @@
 # Validation performed
 
-## Current-repository CI experiments
+## Current-repository CI results
 
-The `Native validation` GitHub Actions workflow runs native macOS ARM64,
-macOS x86-64, Linux ARM64, and Linux x86-64 jobs on standard hosted runners.
-It runs only for public repositories, where those runners are free. Each log
-records its actual Git revision, platform, architecture, and tool versions.
-Linux jobs require rootless Podman and run the full Linux suite, followed by
-a disposable authenticated HTTPS registry test with ephemeral credentials and
-certificate trust. The test verifies the revision and two explicit tags share
-a digest, exactly those tags exist, and the pulled image executes. It does not
-publish to an external registry. Logs are retained as artifacts for seven days.
+Experiments run on 2026-10-30 from this repository's Git history. Standard
+GitHub-hosted runners are used only when the repository is public. Each native
+log records its Git revision, platform, architecture, and tool versions. CI
+installs Nix 2.34.7 and uses the locked Rust 1.95.0 and Nixpkgs dependencies.
+Artifacts are retained for seven days; the run links also identify the tested
+commits independently of later documentation changes.
 
-These jobs are newly added; their presence is not evidence of a passing run.
-The results below remain historical until linked CI results establish otherwise.
-Remote Linux Nix builders and concurrent VM runs are not covered by these jobs.
+The [native validation run](https://github.com/sarifb/coldeer/actions/runs/41082035765)
+passed at `7e0470ef857a6b8f8caf27086058edf83a45d463`:
+
+| Native platform | Runner | Outcome |
+| --- | --- | --- |
+| Linux x86-64 | `ubuntu-24.04` | Passed, including rootless containers |
+| Linux ARM64 | `ubuntu-24.04-arm` | Passed, including rootless containers |
+| macOS ARM64 | `macos-15` | Passed |
+| macOS x86-64 | `macos-15-intel` | Passed |
+
+Native validation uses `nix develop --command bash tools/ci-validation.sh`:
+
+- Every platform runs formatting, Cargo workspace tests, Clippy with warnings
+  denied, native Buck2 tests, both package/BXL import backends, linkage checks,
+  and the explicitly enabled real-daemon and graph-partitioner tests.
+- Linux runs `tools/linux-validation.sh` as the ordinary runner user, verifies
+  `podman info` reports rootless mode, and exercises build/save/load/run, OCI
+  metadata, non-root image execution, Alpine pins, HTTP loopback streaming push,
+  revision and explicit tags, and compressed layer-cache reuse. Ubuntu's
+  AppArmor restriction on unprivileged user namespaces is disabled in these
+  disposable runners so rootless Podman can create its namespaces.
+
+The [Linux integration run](https://github.com/sarifb/coldeer/actions/runs/41081446260)
+passed at `24914404eed89ef3bda4395649f94762f0b7fa68`:
+
+- `nix develop --command bash tools/registry-tls-e2e.sh` passed on native Linux
+  x86-64 and ARM64. A disposable HTTPS Distribution registry required generated
+  credentials. Its generated CA was trusted only within the test process tree;
+  TLS verification remained enabled. The revision and two explicit tags shared
+  a manifest digest, exactly those three tags existed, and the pulled image ran.
+- `nix develop --command bash tools/remote-builder-e2e.sh` passed on native Linux
+  x86-64. A rootless container hosted SSH and an independent Nix store, without
+  mounting the host store. A unique image label forced a fresh derivation.
+  Coldeer constructed the image with local builds disabled (`max-jobs = 0`) and
+  an explicitly configured SSH Linux builder. The result existed in that store,
+  was returned to the host, and its streamed image loaded and ran successfully.
+
+The [external GHCR run](https://github.com/sarifb/coldeer/actions/runs/41081600248)
+passed at `fa305a882d1fdd6916d073b7f554d460e31d12d3` on native Linux x86-64:
+`nix develop --command bash tools/registry-ghcr-e2e.sh <disposable-ghcr-repository>`
+authenticated with the temporary workflow token and used normal public TLS
+trust. Streaming push, equal digests for the revision and two explicit tags,
+exactly those tags with no implicit `latest`, and authenticated pull/run all
+passed. The workflow's separate cleanup step successfully deleted its unique
+test package. No persistent registry credentials were needed or logged.
+
+CI exposed an Intel Darwin dependency evaluation issue: the graph tool's
+upstream igraph tests pull in optional plotting dependencies whose Arrow package
+is marked broken on that platform. The shell disables igraph's upstream
+build-time tests only on Intel Darwin; Coldeer's real graph-partitioner tests
+remain enabled. A Linux subprocess fixture race also produced `ETXTBSY` once;
+the three unit tests that write and execute scripts now share a mutex so their
+forked children cannot temporarily inherit one another's writable script fds.
+
+Remaining limits: the SSH builder is a separate container on the same Linux
+runner, rather than a separate physical host or a Darwin-to-Linux setup.
+Rootless evidence applies to the configured Ubuntu runners. Concurrent Lima
+validation runs remain untested. These experiments do not claim exhaustive
+behavior-by-behavior parity with Snowydeer.
 
 ## Historical checkout results
 
@@ -23,7 +76,7 @@ Last run: 2026-10-30. The working tree was based on Git revision
 present but uncommitted. Image revision labels and pushed revision tags identify
 that HEAD; they do not claim that uncommitted files belong to the commit.
 
-## Platforms
+### Historical platforms
 
 | Platform     | Compilation and execution                                        | Containers                                         |
 | ------------ | ---------------------------------------------------------------- | -------------------------------------------------- |
@@ -37,7 +90,7 @@ and 6 GiB RAM. It uses Nix 2.34.7, Rust 1.95.0, and the repository's locked
 Nixpkgs and Buck2. Host filesystems are not mounted into the guest. The VM disk
 lives outside the repository so Buck2's filesystem crawler does not hash it.
 
-## Linux ARM64 results
+### Historical Linux ARM64 results
 
 `nix develop --command tools/linux-vm.sh test` passed:
 
@@ -95,7 +148,7 @@ It also found a Linux-specific deadlock in the isolated test's bidirectional
 proxy: explicit bounded reads/writes replace `io::copy`'s optimized splice path.
 The production daemon client already uses explicit streaming reads/writes.
 
-## macOS and earlier checks
+### Historical macOS and earlier checks
 
 On macOS ARM64, Cargo tests, formatting, native Buck2 builds, and the real
 package/BXL/import E2E checks passed. The C++ fixtures were inspected with
@@ -115,7 +168,7 @@ Earlier validation additionally checked:
   isolated fake tools. Real pipe tests check binary bytes, failed producers,
   stopping failed uploads, and digest-based retagging.
 
-## Remaining limits
+### Historical limits at that revision
 
 No executables were run on macOS x86-64 or Linux x86-64. Evaluation of all four
 flake platform outputs is not execution coverage. Lima uses the Mac's native
