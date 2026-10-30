@@ -726,6 +726,10 @@ fn save_stream(script: &Path, destination: Option<&Path>) -> Result<()> {
 mod tests {
     use super::*;
 
+    // A concurrent fork can briefly retain another test's writable script fd
+    // until exec closes it, causing Linux ETXTBSY when that script is launched.
+    static PROCESS_FIXTURES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     fn executable(path: &Path, source: &str) {
         use std::os::unix::fs::PermissionsExt;
         fs::write(path, format!("#!/bin/sh\nset -eu\n{source}\n")).unwrap();
@@ -734,6 +738,7 @@ mod tests {
 
     #[test]
     fn streaming_upload_and_digest_retagging() {
+        let _guard = PROCESS_FIXTURES.lock().unwrap();
         let t = Temp::new().unwrap();
         let stream = t.file("stream");
         let skopeo = t.file("skopeo");
@@ -793,6 +798,7 @@ done
 
     #[test]
     fn failed_upload_stops_the_producer() {
+        let _guard = PROCESS_FIXTURES.lock().unwrap();
         let t = Temp::new().unwrap();
         let stream = t.file("stream");
         let skopeo = t.file("skopeo");
@@ -812,6 +818,7 @@ done
 
     #[test]
     fn stream_failure_does_not_publish_partial_archive() {
+        let _guard = PROCESS_FIXTURES.lock().unwrap();
         use std::os::unix::fs::PermissionsExt;
         let t = Temp::new().unwrap();
         let script = t.file("stream");
