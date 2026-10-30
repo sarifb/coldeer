@@ -1,0 +1,5 @@
+/target/
+/buck-out/
+/.direnv/
+/.coldeer/
+*.json.guard

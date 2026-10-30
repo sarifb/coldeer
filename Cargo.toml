@@ -1,0 +1,12 @@
+[package]
+name = "coldeer"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.95"
+description = "Native Buck2 artifact imports and layered Nix container workflows"
+
+[dependencies]
+
+[workspace]
+members = ["demo"]
+resolver = "2"

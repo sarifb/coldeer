@@ -1,0 +1,10 @@
+[package]
+name = "coldeer-hello"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.95"
+publish = false
+
+[[bin]]
+name = "coldeer-hello"
+path = "main.rs"
