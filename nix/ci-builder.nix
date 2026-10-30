@@ -5,6 +5,7 @@ in
 pkgs.dockerTools.buildLayeredImage {
   name = "coldeer-ci-builder";
   tag = "test";
+  maxLayers = 8;
   includeNixDB = true;
   contents = [
     pkgs.nix
@@ -16,8 +17,8 @@ pkgs.dockerTools.buildLayeredImage {
   extraCommands = ''
     mkdir -p etc/nix root tmp run/sshd var/empty
     chmod 1777 tmp
-    echo 'root::0:0:root:/root:/bin/bash' > etc/passwd
-    echo 'root:x:0:' > etc/group
+    printf '%s\n' 'root::0:0:root:/root:/bin/bash' 'sshd:x:74:74:sshd:/var/empty:/bin/bash' > etc/passwd
+    printf '%s\n' 'root:x:0:' 'sshd:x:74:' > etc/group
     cat > etc/nix/nix.conf <<'CONFIG'
     experimental-features = nix-command flakes
     sandbox = false
