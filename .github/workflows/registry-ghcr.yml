@@ -1,0 +1,65 @@
+name: External GHCR experiment
+
+on:
+  push:
+    branches: [ci/registry]
+    paths-ignore: ["docs/**", "README.md"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ghcr:
+    if: github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: cachix/install-nix-action@d9186cbdca7adedf113a159fa91f725a27866771 # v31
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install
+      - name: Prepare disposable package
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y uidmap slirp4netns fuse-overlayfs
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          package="${GITHUB_REPOSITORY#*/}-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "TEST_PACKAGE=${package,,}" >> "$GITHUB_ENV"
+      - name: Push, inspect, pull, and execute
+        env:
+          COLDEER_REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p .coldeer
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          nix develop --command bash tools/registry-ghcr-e2e.sh "ghcr.io/$owner/$TEST_PACKAGE" 2>&1 | tee .coldeer/registry-ghcr.log
+      - name: Delete this run's disposable package
+        if: always() && env.TEST_PACKAGE != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          owner_type=$(gh api "repos/$GITHUB_REPOSITORY" --jq .owner.type)
+          case "$owner_type" in
+            User) scope=users ;;
+            Organization) scope=orgs ;;
+            *) exit 1 ;;
+          esac
+          endpoint="$scope/$GITHUB_REPOSITORY_OWNER/packages/container/$TEST_PACKAGE"
+          # A failed push may never create the package. Other cleanup errors fail.
+          response=$(gh api --include --method DELETE "$endpoint" 2>&1) || {
+            case "$response" in *'HTTP 404'*) echo 'No disposable package to delete'; exit 0;; esac
+            printf '%s\n' "$response"
+            exit 1
+          }
+          echo "Deleted disposable package $TEST_PACKAGE"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: registry-ghcr-log
+          path: .coldeer/registry-ghcr.log
+          retention-days: 7
