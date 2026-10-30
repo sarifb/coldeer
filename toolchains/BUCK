@@ -1,0 +1,32 @@
+load("@prelude//toolchains:cxx.bzl", "system_cxx_toolchain")
+load("@prelude//toolchains:python.bzl", "system_python_bootstrap_toolchain")
+load("@prelude//toolchains:remote_test_execution.bzl", "remote_test_execution_toolchain")
+load("@prelude//tests:test_toolchain.bzl", "noop_test_toolchain")
+load(":rust.bzl", "coldeer_rust_toolchain")
+load(":cxx.bzl", "coldeer_cxx_toolchain")
+load("@nix_toolchain//:defs.bzl", "AR", "CC", "CXX", "CXX_RUNTIME_LINK_FLAGS", "LLD", "PYTHON")
+
+system_cxx_toolchain(
+    name = "cxx-native",
+    compiler = CC,
+    compiler_type = "clang",
+    cxx_compiler = CXX,
+    linker = CXX,
+    archiver = AR,
+    link_style = select({
+        "@root//constraints:link_style[static_pic]": "static_pic",
+        "DEFAULT": "shared",
+    }),
+    link_flags = CXX_RUNTIME_LINK_FLAGS + select({
+        "@prelude//os:linux": ["--ld-path=" + LLD],
+        "DEFAULT": [],
+    }),
+    visibility = [":cxx"],
+)
+coldeer_cxx_toolchain(name = "cxx", actual = ":cxx-native", visibility = ["PUBLIC"])
+# Buck2's bundled prelude uses its own compiler/linker helper scripts.
+# Coldeer itself contains no Python source or Python build orchestration.
+system_python_bootstrap_toolchain(name = "python_bootstrap", interpreter = PYTHON, visibility = ["PUBLIC"])
+remote_test_execution_toolchain(name = "remote_test_execution", visibility = ["PUBLIC"])
+noop_test_toolchain(name = "test", visibility = ["PUBLIC"])
+coldeer_rust_toolchain(name = "rust", visibility = ["PUBLIC"])

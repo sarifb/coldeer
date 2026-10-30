@@ -1,0 +1,26 @@
+"""Import arbitrary single-output targets, respecting CLI configurations."""
+load("@prelude//utils:utils.bzl", "flatten")
+load(":providers.bzl", "candidates", "declare_import")
+
+def _main(ctx):
+    tool = ctx.unconfigured_sub_targets("//:coldeer")
+    actions = ctx.bxl_actions(exec_deps = [tool])
+    targets = ctx.target_universe(flatten(ctx.cli_args.target), modifiers = ctx.modifiers).target_set()
+    for index, target in enumerate(targets):
+        analysis = ctx.analysis(target).providers()
+        outputs = analysis[DefaultInfo].default_outputs
+        if len(outputs) != 1:
+            fail("arbitrary imports require exactly one default output: " + str(target.label))
+        deps = ctx.analysis(ctx.cquery().deps(target))
+        paths, files = candidates([result.providers() for result in deps.values()])
+        paths.extend(ctx.cli_args.nix_path)
+        if ctx.cli_args.import_backend not in ["direct", "derivation"]:
+            fail("--import_backend must be direct or derivation")
+        result = declare_import(actions.actions, actions.exec_deps[tool][RunInfo], outputs[0], target.label.name, dedupe(paths), files, suffix = "_" + str(index), backend = ctx.cli_args.import_backend)
+        ctx.output.print(ctx.output.ensure(result))
+
+main = bxl.main(impl = _main, cli_args = {
+    "target": bxl.cli_args.list(bxl.cli_args.target_expr(), default = []),
+    "nix_path": bxl.cli_args.list(bxl.cli_args.string(), default = []),
+    "import_backend": bxl.cli_args.string(default = "direct"),
+})

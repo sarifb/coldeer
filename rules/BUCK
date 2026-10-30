@@ -1,0 +1,3 @@
+load(":linking.bzl", "package_linking")
+
+package_linking(name = "package_linking", visibility = ["PUBLIC"])

@@ -1,0 +1,25 @@
+load("@prelude//:rules.bzl", "rust_binary")
+load("//rules:defs.bzl", "coldeer_base_image", "coldeer_container", "coldeer_package")
+
+rust_binary(
+    name = "hello",
+    srcs = ["main.rs"],
+    crate_root = "main.rs",
+    edition = "2021",
+)
+
+coldeer_package(name = "hello_pkg", binaries = [":hello"])
+
+coldeer_base_image(
+    name = "alpine",
+    image_name = "docker.io/library/alpine",
+    follows_tag = "3.23",
+    lock_file = "alpine.lock.json",
+)
+
+coldeer_container(
+    name = "hello_container",
+    description = "Rust hello-world packaged by Coldeer",
+    cmd = ["/bin/hello"],
+    main_contents = [":hello_pkg"],
+)
