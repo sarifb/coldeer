@@ -43,11 +43,13 @@ auth:
     realm: coldeer-validation
     path: $test_dir/htpasswd
 CONFIG
-registry serve "$test_dir/registry.yaml" > "$test_dir/registry.log" 2>&1 &
+# Distribution interprets REGISTRY_* as server configuration; the client auth
+# file variable would otherwise add an unintended server auth provider.
+env -u REGISTRY_AUTH_FILE registry serve "$test_dir/registry.yaml" > "$test_dir/registry.log" 2>&1 &
 registry_pid=$!
 ready=false
-for attempt in {1..60}; do
-    kill -0 "$registry_pid"
+for _attempt in {1..60}; do
+    if ! kill -0 "$registry_pid" 2>/dev/null; then cat "$test_dir/registry.log"; exit 1; fi
     code=$(curl --silent --cacert "$cert_dir/ca.crt" -o /dev/null -w '%{http_code}' https://localhost:5021/v2/ || true)
     if [ "$code" = 401 ]; then ready=true; break; fi
     sleep 1
