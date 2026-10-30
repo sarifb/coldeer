@@ -24,6 +24,20 @@
       devShells = each (
         pkgs:
         let
+          # Intel Darwin's upstream igraph plotting tests pull in broken Arrow.
+          # Coldeer uses no plotting; its real graph integration tests still run.
+          graphPartitioner =
+            if pkgs.stdenv.hostPlatform.system == "x86_64-darwin" then
+              pkgs.flatten-references-graph.override {
+                python3Packages = pkgs.python3Packages.overrideScope (_final: prev: {
+                  igraph = prev.igraph.overridePythonAttrs (_old: {
+                    doCheck = false;
+                    nativeCheckInputs = [ ];
+                  });
+                });
+              }
+            else
+              pkgs.flatten-references-graph;
           toolchain = pkgs.writeTextDir "defs.bzl" ''
             # Generated from the locked Nixpkgs input. Do not edit.
             RUSTC = "${pkgs.rustc}/bin/rustc"
@@ -72,7 +86,7 @@
                 jq
                 nixd
                 nil
-                flatten-references-graph
+                graphPartitioner
                 git
               ]
               ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.lima ]
