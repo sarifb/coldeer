@@ -1,0 +1,46 @@
+# Disposable native Linux guest; no host filesystem mounts.
+# Ubuntu release and official Nix installer archives are checksum-pinned.
+minimumLimaVersion: 2.1.0
+vmType: vz
+cpus: 4
+memory: 6GiB
+disk: 32GiB
+mounts: []
+containerd:
+  system: false
+  user: false
+images:
+  - location: https://cloud-images.ubuntu.com/releases/noble/release-20261017/ubuntu-24.04-server-cloudimg-arm64.img
+    arch: aarch64
+    digest: sha256:50e24e1fb79e89116e939d90aa7738f7af48c442fa1bc2510131e0b39c50348e
+  - location: https://cloud-images.ubuntu.com/releases/noble/release-20261017/ubuntu-24.04-server-cloudimg-amd64.img
+    arch: x86_64
+    digest: sha256:04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94
+provision:
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+      export HOME=/root
+      if [ -f /var/lib/coldeer-validation/provisioned-2.34.7 ]; then exit 0; fi
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update
+      apt-get install -y ca-certificates curl xz-utils git uidmap iptables
+      if [ ! -x /nix/var/nix/profiles/default/bin/nix ]; then
+        case "$(uname -m)" in
+          aarch64) archive_hash=f1cee64ae7a02330c6421924c28f597c41813f2214ff108622087d8056378b08 ;;
+          x86_64) archive_hash=eafe5042404e818505e28c5ca3d0885f3ec45c31f955489a25bb38258f87560e ;;
+          *) echo 'unsupported VM architecture' >&2; exit 1 ;;
+        esac
+        task_tmp=$(mktemp -d)
+        trap 'rm -rf "$task_tmp"' EXIT
+        curl --fail --location --retry 3 "https://releases.nixos.org/nix/nix-2.34.7/nix-2.34.7-$(uname -m)-linux.tar.xz" -o "$task_tmp/nix.tar.xz"
+        printf '%s  %s\n' "$archive_hash" "$task_tmp/nix.tar.xz" | sha256sum --check
+        tar -xJf "$task_tmp/nix.tar.xz" -C "$task_tmp"
+        bash "$task_tmp/nix-2.34.7-$(uname -m)-linux/install" --daemon --yes --no-channel-add --no-modify-profile
+      fi
+      printf '\nexperimental-features = nix-command flakes ca-derivations\n' >> /etc/nix/nix.conf
+      systemctl enable --now nix-daemon.socket
+      systemctl restart nix-daemon.service
+      mkdir -p /var/lib/coldeer-validation
+      touch /var/lib/coldeer-validation/provisioned-2.34.7

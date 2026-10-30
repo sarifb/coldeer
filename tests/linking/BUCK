@@ -1,0 +1,13 @@
+load("@prelude//:rules.bzl", "cxx_binary", "cxx_library", "platform")
+load("//rules:defs.bzl", "coldeer_package")
+
+cxx_library(name = "greeting", srcs = ["library.cpp"])
+cxx_binary(name = "app", srcs = ["main.cpp"], deps = [":greeting"])
+cxx_binary(name = "shared_app", srcs = ["main.cpp"], deps = [":greeting"], link_style = "shared")
+coldeer_package(name = "static_pkg", binaries = [":app"])
+coldeer_package(name = "shared_pkg", binaries = [":shared_app"])
+platform(
+    name = "shared_host",
+    deps = ["prelude//platforms:default"],
+    constraint_values = ["//constraints:link_style[shared]"],
+)

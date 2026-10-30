@@ -1,0 +1,20 @@
+"""Verify that package imports discover toolchain dependencies without CLI flags."""
+load("@prelude//utils:utils.bzl", "flatten")
+load("@nix_toolchain//:defs.bzl", "CXX_NIX_PATHS", "RUST_NIX_PATHS")
+load("//rules:providers.bzl", "ColdeerNixCandidates")
+
+def _main(ctx):
+    targets = ctx.target_universe(flatten(ctx.cli_args.target), modifiers = ctx.modifiers).target_set()
+    if not targets:
+        fail("supply at least one package target")
+    for target in targets:
+        providers = ctx.analysis(target).providers()
+        paths = providers[ColdeerNixCandidates].paths
+        missing = [p for p in RUST_NIX_PATHS + CXX_NIX_PATHS if p not in paths]
+        if missing:
+            fail("package {} is missing toolchain Nix dependencies: {}".format(target.label, missing))
+    ctx.output.print("Toolchain Nix dependency discovery passed")
+
+main = bxl.main(impl = _main, cli_args = {
+    "target": bxl.cli_args.list(bxl.cli_args.target_expr(), default = []),
+})
