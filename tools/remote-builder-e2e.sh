@@ -30,8 +30,9 @@ nix build --impure --file nix/ci-builder.nix --argstr nixpkgs "$COLDEER_NIXPKGS"
 printf '%s\n' '{"default":[{"type":"insecureAcceptAnything"}]}' > "$test_dir/policy.json"
 podman load --signature-policy "$test_dir/policy.json" -i "$test_dir/builder-image"
 builder_container=$(podman run -d -p 127.0.0.1:5022:22 -v "$test_dir/ssh:/config:ro" localhost/coldeer-ci-builder:test)
-host_key=$(base64 < "$test_dir/ssh/host.pub" | tr -d '\n' | sed 's/+/%2B/g; s,/,\%2F,g; s/=/%3D/g')
-remote="ssh://root@127.0.0.1:5022?ssh-key=$test_dir/client&base64-ssh-public-host-key=$host_key"
+host_key=$(base64 < "$test_dir/ssh/host.pub" | tr -d '\n')
+encoded_host_key=$(printf '%s' "$host_key" | sed 's/+/%2B/g; s,/,\%2F,g; s/=/%3D/g')
+remote="ssh://root@127.0.0.1:5022?ssh-key=$test_dir/client&base64-ssh-public-host-key=$encoded_host_key"
 ready=false
 for _attempt in {1..60}; do
     if nix store ping --store "$remote" >/dev/null 2>&1; then ready=true; break; fi
@@ -46,7 +47,7 @@ system=$(nix eval --impure --raw --expr builtins.currentSystem)
 # Disable all local builds for the actual Coldeer image construction.
 export NIX_CONFIG="${NIX_CONFIG:-}
 max-jobs = 0
-builders = $remote $system - 1 1 - -
+builders = ssh://root@127.0.0.1:5022 $system $test_dir/client 1 1 - - $host_key
 "
 stream=$("$cli" container "$test_dir/plan.json" build "$test_dir/stream")
 unset NIX_CONFIG

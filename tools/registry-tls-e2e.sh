@@ -6,24 +6,23 @@ cd "$(dirname "$0")/.."
 for tool in registry openssl htpasswd curl skopeo podman jq buck2; do command -v "$tool" >/dev/null; done
 test_dir=$(mktemp -d)
 registry_pid=
-cert_dir="$HOME/.config/containers/certs.d/localhost:5021"
-owns_cert_dir=false
+cert_dir="$test_dir/certs"
 cleanup() {
     if [ -n "$registry_pid" ]; then kill "$registry_pid" 2>/dev/null || true; wait "$registry_pid" 2>/dev/null || true; fi
-    if [ "$owns_cert_dir" = true ]; then rm -rf "$cert_dir"; fi
     rm -rf "$test_dir"
 }
 trap cleanup EXIT
 umask 077
 export REGISTRY_AUTH_FILE="$test_dir/auth.json"
 export XDG_CONFIG_HOME="$test_dir/config"
-mkdir -p "$XDG_CONFIG_HOME/containers" "$(dirname "$cert_dir")"
-# Refuse to replace any existing trust configuration.
-mkdir "$cert_dir"
-owns_cert_dir=true
+mkdir -p "$XDG_CONFIG_HOME/containers" "$cert_dir"
 printf '%s\n' '{"default":[{"type":"insecureAcceptAnything"}]}' > "$XDG_CONFIG_HOME/containers/policy.json"
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost \
     -addext subjectAltName=DNS:localhost -keyout "$test_dir/tls.key" -out "$cert_dir/ca.crt" 2>/dev/null
+# Scope trust to this process tree. Keep the existing public roots so Nix and
+# registry clients can still access public services with TLS verification.
+cat "${SSL_CERT_FILE:-/etc/ssl/certs/ca-certificates.crt}" "$cert_dir/ca.crt" > "$test_dir/ca-bundle.crt"
+export SSL_CERT_FILE="$test_dir/ca-bundle.crt"
 password=$(openssl rand -hex 32)
 printf '%s\n' "$password" | htpasswd -Bni validation > "$test_dir/htpasswd"
 cat > "$test_dir/registry.yaml" <<CONFIG

@@ -29,12 +29,14 @@
           graphPartitioner =
             if pkgs.stdenv.hostPlatform.system == "x86_64-darwin" then
               pkgs.flatten-references-graph.override {
-                python3Packages = pkgs.python3Packages.overrideScope (_final: prev: {
-                  igraph = prev.igraph.overridePythonAttrs (_old: {
-                    doCheck = false;
-                    nativeCheckInputs = [ ];
-                  });
-                });
+                python3Packages = pkgs.python3Packages.overrideScope (
+                  _final: prev: {
+                    igraph = prev.igraph.overridePythonAttrs (_old: {
+                      doCheck = false;
+                      nativeCheckInputs = [ ];
+                    });
+                  }
+                );
               }
             else
               pkgs.flatten-references-graph;
