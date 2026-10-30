@@ -2,7 +2,8 @@ name: Native validation
 
 on:
   push:
-    branches: [main, ci/free-validation]
+    branches: [main, ci/free-validation, ci/remote-builder]
+    paths-ignore: ["docs/**", "README.md"]
   pull_request:
   workflow_dispatch:
 

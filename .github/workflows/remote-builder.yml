@@ -3,6 +3,7 @@ name: Linux integration experiments
 on:
   push:
     branches: [main, ci/remote-builder]
+    paths-ignore: ["docs/**", "README.md"]
   pull_request:
   workflow_dispatch:
 
