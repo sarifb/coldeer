@@ -1,5 +1,23 @@
 # Validation performed
 
+## Current-repository CI experiments
+
+The `Native validation` GitHub Actions workflow runs native macOS ARM64,
+macOS x86-64, Linux ARM64, and Linux x86-64 jobs on standard hosted runners.
+It runs only for public repositories, where those runners are free. Each log
+records its actual Git revision, platform, architecture, and tool versions.
+Linux jobs require rootless Podman and run the full Linux suite, followed by
+a disposable authenticated HTTPS registry test with ephemeral credentials and
+certificate trust. The test verifies the revision and two explicit tags share
+a digest, exactly those tags exist, and the pulled image executes. It does not
+publish to an external registry. Logs are retained as artifacts for seven days.
+
+These jobs are newly added; their presence is not evidence of a passing run.
+The results below remain historical until linked CI results establish otherwise.
+Remote Linux Nix builders and concurrent VM runs are not covered by these jobs.
+
+## Historical checkout results
+
 Last run: 2026-10-30. The working tree was based on Git revision
 `f79f6cc762d0a2d5175d50993224ded123f80e20`, with the Linux validation changes
 present but uncommitted. Image revision labels and pushed revision tags identify

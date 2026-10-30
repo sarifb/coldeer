@@ -1,0 +1,51 @@
+name: Native validation
+
+on:
+  push:
+    branches: [main, ci/free-validation]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    # Standard runners are free for public repositories. Never opt into billing.
+    if: github.event.repository.private == false
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15-intel, macos-15]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: cachix/install-nix-action@d9186cbdca7adedf113a159fa91f725a27866771 # v31
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install
+          extra_nix_config: |
+            experimental-features = nix-command flakes ca-derivations
+      - name: Linux prerequisites
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y uidmap slirp4netns fuse-overlayfs apache2-utils
+          # Ubuntu AppArmor otherwise denies unprivileged container namespaces.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Native compilation and execution
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p .coldeer
+          nix develop --command bash tools/ci-validation.sh 2>&1 | tee .coldeer/ci-validation.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: validation-${{ matrix.runner }}
+          path: .coldeer/ci-validation.log
+          retention-days: 7
