@@ -13,7 +13,6 @@ case "$(uname -s)" in
         [ "$(id -u)" != 0 ]
         podman info --format json | jq -e '.host.security.rootless == true'
         tools/linux-validation.sh
-        tools/registry-tls-e2e.sh
         ;;
     Darwin)
         cargo test --locked --workspace

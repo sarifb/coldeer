@@ -1,14 +1,44 @@
-name: SSH builder experiment
+name: Linux integration experiments
 
 on:
   push:
-    branches: [ci/remote-builder]
+    branches: [main, ci/remote-builder]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  registry-tls:
+    if: github.event.repository.private == false
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: cachix/install-nix-action@d9186cbdca7adedf113a159fa91f725a27866771 # v31
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y uidmap slirp4netns fuse-overlayfs apache2-utils
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Authenticated TLS push and pull
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p .coldeer
+          nix develop --command bash tools/registry-tls-e2e.sh 2>&1 | tee .coldeer/registry-tls.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: registry-tls-${{ matrix.runner }}
+          path: .coldeer/registry-tls.log
+          retention-days: 7
   ssh-builder:
     if: github.event.repository.private == false
     runs-on: ubuntu-24.04
